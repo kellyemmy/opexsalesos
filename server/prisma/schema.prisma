@@ -1,0 +1,291 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ===== User Models =====
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(SALES_REP)
+  avatar    String?
+  active    Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leads        Lead[]
+  campaigns    Campaign[]
+  messages     Message[]
+  auditLogs    AuditLog[]
+  aiUsage      AIUsage[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES_REP
+}
+
+// ===== Lead Models =====
+
+model Lead {
+  id        String   @id @default(cuid())
+  email     String
+  name      String
+  phone     String?
+  company   String?
+  title     String?
+  location  String?
+  status    LeadStatus @default(NEW)
+  source    String?   // LinkedIn, Website, Email, etc.
+  score     Int       @default(0) // Lead scoring
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  campaigns CampaignLead[]
+  messages  Message[]
+  events    Event[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+// ===== Campaign Models =====
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      CampaignStatus @default(DRAFT)
+  template    String?  // Email template
+  recipients  Int      @default(0) // Total leads in campaign
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  leads       CampaignLead[]
+  messages    Message[]
+  events      Event[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("campaigns")
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+model CampaignLead {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  status      CampaignLeadStatus @default(PENDING)
+  sentAt      DateTime?
+  repliedAt   DateTime?
+
+  @@unique([campaignId, leadId])
+  @@index([campaignId])
+  @@index([leadId])
+  @@map("campaign_leads")
+}
+
+enum CampaignLeadStatus {
+  PENDING
+  SENT
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+}
+
+// ===== Message/Conversation Models =====
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  subject   String?
+  channel   MessageChannel
+  status    MessageStatus @default(PENDING)
+  externalId String?      // For webhook tracking
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  sentAt    DateTime?
+  openedAt  DateTime?
+  clickedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([leadId])
+  @@index([campaignId])
+  @@map("messages")
+}
+
+enum MessageChannel {
+  EMAIL
+  SMS
+  LINKEDIN
+  PHONE
+  WHATSAPP
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  REPLIED
+  BOUNCED
+  FAILED
+}
+
+// ===== Event Tracking Models =====
+
+model Event {
+  id        String   @id @default(cuid())
+  type      EventType
+  source    String   // "email", "sms", "webhook", etc.
+  externalId String?  // For tracking from external providers
+  
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  campaignId String?
+  campaign   Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  metadata  Json?    // Additional data (IP, user agent, etc.)
+  
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([campaignId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("events")
+}
+
+enum EventType {
+  EMAIL_SENT
+  EMAIL_DELIVERED
+  EMAIL_OPENED
+  EMAIL_CLICKED
+  EMAIL_BOUNCED
+  EMAIL_UNSUBSCRIBED
+  SMS_SENT
+  SMS_DELIVERED
+  SMS_FAILED
+  CALL_MADE
+  CALL_ANSWERED
+  REPLY_RECEIVED
+  FORM_SUBMITTED
+  WEBPAGE_VISITED
+}
+
+// ===== Audit Log Models =====
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  resource  String
+  resourceId String
+  description String?
+  changes   Json?    // What changed
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ===== AI Usage Models =====
+
+model AIUsage {
+  id        String   @id @default(cuid())
+  action    String   // "write", "sequence", "summarize", "insights", "compliance"
+  prompt    String
+  response  String
+  tokens    Int      // Token count
+  cost      Float    // Estimated cost
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("ai_usage")
+}
+
+// ===== Webhook Models =====
+
+model WebhookEvent {
+  id        String   @id @default(cuid())
+  provider  String   // "sendgrid", "twilio", "mailgun", etc.
+  eventType String
+  payload   Json
+  processed Boolean  @default(false)
+
+  createdAt DateTime @default(now())
+  processedAt DateTime?
+
+  @@index([provider])
+  @@index([processed])
+  @@map("webhook_events")
+}
