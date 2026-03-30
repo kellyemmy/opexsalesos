@@ -33,7 +33,7 @@ const AppContent = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={<Navigate to="/" />} />
+      <Route path="/login" element={<LoginPage />} />
       
       {/* Protected routes */}
       <Route
