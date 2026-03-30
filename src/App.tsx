@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAppStore } from "@/store";
 import { ProtectedRoute } from "@/utils/authGuards";
+import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import Leads from "./pages/Leads";
 import Campaigns from "./pages/Campaigns";
@@ -32,7 +33,7 @@ const AppContent = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={<Navigate to="/" />} />
+      <Route path="/login" element={<LoginPage />} />
       
       {/* Protected routes */}
       <Route
